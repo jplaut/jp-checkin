@@ -114,7 +114,7 @@ def index():
 
         checkins = fb_call('me/friends', args={'access_token': access_token})
 
-        return Template(filename='index.html').render(checkins=checkins)
+        return Template(filename='templates/index.html').render(checkins=checkins)
 
     else:
         print oauth_login_url(next_url=get_home())
