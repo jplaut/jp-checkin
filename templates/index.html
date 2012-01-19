@@ -10,6 +10,8 @@
 	<!-- Date: 2012-01-17 -->
 </head>
 <body>
-${checkins}
+	% for k, v in checkins_sorted.items():
+		<li>${k}: ${v}</li>
+	% endfor
 </body>
 </html>
