@@ -115,7 +115,7 @@ def aggregate_checkin_location(checkins_unsorted):
 	d = defaultdict(list)
 
 	for k, v in checkins_tuple:
-		if not v in d[str(k)]:
+		if not str(v) in d[str(k)]:
 			d[str(k)].append(str(v))
 
 	return dict(d)
