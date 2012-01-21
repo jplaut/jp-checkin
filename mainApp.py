@@ -91,10 +91,11 @@ def fbapi_get_application_access_token(id):
 def fql(fql, token, args=None):
 	if not args:
 		args = {}
+	
+	args["q"], args["format"], args["access_token"] = fql, "json", token
 
-	args["query"], args["format"], args["access_token"] = fql, "json", token
 	return json.loads(
-		urllib2.urlopen("https://api.facebook.com/method/fql.query?" +
+		urllib2.urlopen("https://graph.facebook.com/fql?" +
 						urllib.urlencode(args)).read())
 
 def fb_call(call, args=None):
@@ -109,14 +110,13 @@ def aggregate_checkin_location(checkins_unsorted):
 	checkins_tuple=[]
 	for checkin in checkins_unsorted:
 		checkins_tuple.append((checkin['page_id'], checkin['author_uid']))
-		
+
 	checkins_sorted={}
 	d = defaultdict(list)
-	
+
 	for k, v in checkins_tuple:
-		if not v in d[k]:
-			d[k].append(int(str(v).rstrip('L')))
-		
+		if not v in d[str(k)]:
+			d[str(k)].append(str(v))
 
 	return dict(d)
 
@@ -126,10 +126,9 @@ def index():
 	print get_home()
 	if request.args.get('code', None):
 		access_token = fbapi_auth(request.args.get('code'))[0]
-
-		checkins = fql("SELECT author_uid, page_id FROM checkin WHERE author_uid IN (SELECT uid2 FROM friend WHERE uid1=me())", access_token)
-		checkins_sorted = aggregate_checkin_location(checkins)
-	
+		
+		checkins = fql("{\"query1\":\"SELECT uid2 FROM friend WHERE uid1=me()\",\"query2\":\"SELECT page_id, author_uid FROM checkin WHERE author_uid IN (SELECT uid2 FROM #query1)\"}", access_token)
+		checkins_sorted = aggregate_checkin_location(checkins['data'][1]['fql_result_set'])
 
 		return Template(filename='templates/index.html').render(checkins_sorted=checkins_sorted)
 
