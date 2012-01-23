@@ -12,22 +12,22 @@ from mako.template import Template
 
 app = Flask(__name__)
 app.config.from_object(__name__)
-app.config.from_object('conf.Config')
 
 if os.environ.get('FACEBOOK_APP_ID'):
-	APP_ID = os.environ.get('FACEBOOK_APP_ID')
-	APP_SECRET = os.environ.get('FACEBOOK_SECRET')
+	app.config.from_object('conf.Config')
 else:
-	APP_ID = app.config.get('FACEBOOK_APP_ID')
-	APP_SECRET = app.config.get('FACEBOOK_SECRET')
+	app.config.from_envvar('FLASK_CONFIG')
+
+APP_ID = os.environ.get('FACEBOOK_APP_ID')
+APP_SECRET = os.environ.get('FACEBOOK_SECRET')
 
 
 def connect_to_database():
 	DBPATH=os.environ.get('MONGODBPATH')
 	DBNAME=os.environ.get('MONGODBDATABASE')
 	connection = pymongo.Connection(DBPATH)
-	db = connection.app2412171
-	return db.data
+	db = connection[DBNAME]
+	return db
 
 def oauth_login_url(preserve_path=True, next_url=None):
 	fb_login_uri = ("https://www.facebook.com/dialog/oauth"
@@ -112,10 +112,27 @@ def fb_call(call, args=None):
 	
 def get_home():
 	return 'http://' + request.host + '/'
-	
-def aggregate_checkins(token):
-	return fql("{\"query1\":\"SELECT uid2 FROM friend WHERE uid1=me()\",\"query2\":\"SELECT page_id, author_uid FROM checkin WHERE author_uid IN (SELECT uid2 FROM #query1)\"}", token)
 
+def get_checkins(username, database, token):
+	checkinOffset = 0
+	checkinsTemp = []
+	checkins = []
+	
+	query1 = "\"query1\":\"SELECT uid2 FROM friend WHERE uid1=me() LIMIT 200"
+	query2 = "\"query2\":\"SELECT page_id, author_uid FROM checkin WHERE author_uid IN (SELECT uid2 FROM #query1)\""
+	query3 = "\"query3\":\"SELECT name FROM place WHERE page_id IN (SELECT page_id FROM #query2)\""
+	
+	if not database.find_one({'username':username}):
+		while checkinsTemp or checkinOffset == 0:	
+			checkinsTemp = fql("{%s OFFSET %s\",%s}" % (query1, checkinOffset, query2), token)['data'][1]['fql_result_set']
+			checkins+=checkinsTemp
+		
+		database.insert({'username':username, 'checkins':checkins})
+	else:
+		pass
+	
+	return database.find_one({'username':username})['checkins']
+ 	
 def sort_checkins(checkins_unsorted):
 	checkins_tuple=[]
 	for checkin in checkins_unsorted:
@@ -130,16 +147,21 @@ def sort_checkins(checkins_unsorted):
 
 	return dict(d)
 
-def get_username(token):
-	return fb_call('me', args={'access_token':token})['username']
+def get_info(info, token):
+	return fb_call('me', args={'access_token':token})[info]
 
 
 @app.route('/', methods=['GET', 'POST'])
 def welcome():
 	if request.args.get('code', None):
 		access_token = fbapi_auth(request.args.get('code'))[0]
-		username = get_username(access_token)
-		return Template(filename='templates/index.html').render(username=username)
+		username = get_info('username', access_token)
+		database = connect_to_database()
+		checkinCollection = database.checkins
+		checkins = get_checkins(username, checkinCollection, access_token)
+		checkinsSorted = sort_checkins(checkins)
+		
+		return Template(filename='templates/index.html').render(name=username, checkinsSorted = checkinsSorted)
 	else:
 		return Template(filename='templates/welcome.html').render()
 		
@@ -147,23 +169,10 @@ def welcome():
 def login():
 	print oauth_login_url(next_url=get_home())
 	return redirect(oauth_login_url(next_url=get_home()))
-	
-@app.route('/<username>/')
-def index(username):
-		#checkins = aggregate_checkins(access_token)
-		#checkins_sorted = sort_checkins(checkins['data'][1]['fql_result_set'])
-
-		return Template(filename='templates/index.html').render(username=username)
 
 @app.route('/close/', methods=['GET', 'POST'])
 def close():
 	return render_template('templates/close.html')
-
-@app.route('/test/', methods=['GET', 'POST'])
-def test():
-	print "YES!"
-	return None
-	
 		
 @app.route('/fb/callback/', methods=['GET', 'POST'])
 def handle_facebook_requests():

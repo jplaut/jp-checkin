@@ -10,6 +10,9 @@
 	<!-- Date: 2012-01-17 -->
 </head>
 <body>
-	<h1>Welcome, ${username}!</h1>
+	<h1>Welcome, ${name}!</h1>
+	% for k, v in checkinsSorted.items():
+	<li>${k}: ${v}</li>
+	% endfor
 </body>
 </html>
