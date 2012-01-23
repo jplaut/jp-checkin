@@ -10,7 +10,7 @@
 			<key>filename</key>
 			<string>mainApp.py</string>
 			<key>lastUsed</key>
-			<date>2012-01-18T00:39:45Z</date>
+			<date>2012-01-23T21:07:08Z</date>
 			<key>selected</key>
 			<true/>
 		</dict>
@@ -18,41 +18,55 @@
 			<key>filename</key>
 			<string>conf.py</string>
 			<key>lastUsed</key>
-			<date>2012-01-18T00:39:45Z</date>
+			<date>2012-01-23T21:07:08Z</date>
 		</dict>
 		<dict>
 			<key>filename</key>
 			<string>templates/index.html</string>
 			<key>lastUsed</key>
-			<date>2012-01-17T21:14:55Z</date>
+			<date>2012-01-23T20:28:42Z</date>
 		</dict>
 	</array>
 	<key>fileHierarchyDrawerWidth</key>
 	<integer>200</integer>
 	<key>metaData</key>
 	<dict>
+		<key>conf.py</key>
+		<dict>
+			<key>caret</key>
+			<dict>
+				<key>column</key>
+				<integer>52</integer>
+				<key>line</key>
+				<integer>7</integer>
+			</dict>
+			<key>firstVisibleColumn</key>
+			<integer>0</integer>
+			<key>firstVisibleLine</key>
+			<integer>0</integer>
+		</dict>
 		<key>mainApp.py</key>
 		<dict>
 			<key>caret</key>
 			<dict>
 				<key>column</key>
-				<integer>0</integer>
+				<integer>18</integer>
 				<key>line</key>
-				<integer>82</integer>
+				<integer>117</integer>
 			</dict>
 			<key>firstVisibleColumn</key>
 			<integer>0</integer>
 			<key>firstVisibleLine</key>
-			<integer>60</integer>
+			<integer>89</integer>
 		</dict>
 		<key>templates/index.html</key>
 		<dict>
 			<key>caret</key>
 			<dict>
 				<key>column</key>
-				<integer>10</integer>
+				<integer>37</integer>
 				<key>line</key>
-				<integer>12</integer>
+				<integer>13</integer>
 			</dict>
 			<key>firstVisibleColumn</key>
 			<integer>0</integer>
@@ -64,10 +78,11 @@
 	<array>
 		<string>mainApp.py</string>
 		<string>templates/index.html</string>
+		<string>conf.py</string>
 	</array>
 	<key>showFileHierarchyDrawer</key>
 	<true/>
 	<key>windowFrame</key>
-	<string>{{21, 4}, {844, 1024}}</string>
+	<string>{{108, 4}, {844, 1024}}</string>
 </dict>
 </plist>

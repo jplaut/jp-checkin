@@ -115,10 +115,11 @@ def get_home():
 
 def get_checkins(username, database, token):
 	checkinOffset = 0
+	offsetInterval=100
 	checkinsTemp = []
 	checkins = []
 	
-	query1 = "\"query1\":\"SELECT uid2 FROM friend WHERE uid1=me() LIMIT 200"
+	query1 = "\"query1\":\"SELECT uid2 FROM friend WHERE uid1=me() LIMIT %s" % offsetInterval
 	query2 = "\"query2\":\"SELECT page_id, author_uid FROM checkin WHERE author_uid IN (SELECT uid2 FROM #query1)\""
 	query3 = "\"query3\":\"SELECT name FROM place WHERE page_id IN (SELECT page_id FROM #query2)\""
 	
@@ -126,6 +127,7 @@ def get_checkins(username, database, token):
 		while checkinsTemp or checkinOffset == 0:	
 			checkinsTemp = fql("{%s OFFSET %s\",%s}" % (query1, checkinOffset, query2), token)['data'][1]['fql_result_set']
 			checkins+=checkinsTemp
+			checkinOffset+=offsetInterval
 		
 		database.insert({'username':username, 'checkins':checkins})
 	else:
