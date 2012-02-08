@@ -15,7 +15,7 @@ db = connection[DBNAME]
 redisServer = environ.get("REDIS_QUEUE_SERVER")
 redisPassword = environ.get("REDIS_QUEUE_PASSWORD")
 
-redisQueue = pyres.ResQ(server=redisServer, password=redisPassword)
+redisQueue = pyres.ResQ(redisServer, redisPassword)
 
 def fql(fql, token, args=None):
 	if not args:
