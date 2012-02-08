@@ -4,7 +4,7 @@ import urllib
 import urllib2
 from collections import defaultdict
 import redis
-import myres
+import pyres
 import simplejson as json
 
 DBPATH=environ.get('MONGODBPATH')
@@ -15,7 +15,7 @@ db = connection[DBNAME]
 redisServer = environ.get("REDIS_QUEUE_SERVER")
 redisPassword = environ.get("REDIS_QUEUE_PASSWORD")
 
-redisQueue = myres.ResQ(server=redisServer, password=redisPassword)
+redisQueue = pyres.ResQ(server=redisServer, password=redisPassword)
 
 def fql(fql, token, args=None):
 	if not args:
