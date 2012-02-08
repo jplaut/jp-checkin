@@ -143,7 +143,7 @@ def welcome():
 			
 		return Template(filename='templates/index.html').render(name=username)
 	else:
-		return redirect(oauth_login_url(next_url=get_facebook_callback_url()))
+		return redirect(oauth_login_url(next_url='http://jp-checkin.herokuapp.com/callback/'))
 		
 @app.route('/login/', methods=['GET', 'POST'])
 def login():
