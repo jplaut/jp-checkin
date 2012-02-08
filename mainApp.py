@@ -1,14 +1,16 @@
 import base64
 import os
-import os.path
 import simplejson as json
 import urllib
 import urllib2
 from collections import defaultdict
+import requests
 
 import pymongo
 from flask import Flask, request, redirect, url_for
 from mako.template import Template
+import pyres
+from tasks import *
 
 app = Flask(__name__)
 app.config.from_object(__name__)
@@ -16,18 +18,15 @@ app.config.from_object(__name__)
 if os.environ.get('FACEBOOK_APP_ID'):
 	app.config.from_object('conf.Config')
 else:
-	app.config.from_envvar('FLASK_CONFIG')
+	app.config.from_envvar('MAIN_CONFIG')
 
 APP_ID = os.environ.get('FACEBOOK_APP_ID')
 APP_SECRET = os.environ.get('FACEBOOK_SECRET')
 
+redisServer = os.environ.get("REDIS_QUEUE_SERVER")
+redisPassword = os.environ.get("REDIS_QUEUE_PASSWORD")
 
-def connect_to_database():
-	DBPATH=os.environ.get('MONGODBPATH')
-	DBNAME=os.environ.get('MONGODBDATABASE')
-	connection = pymongo.Connection(DBPATH)
-	db = connection[DBNAME]
-	return db
+redisQueue = pyres.ResQ(server=redisServer, password=redisPassword)
 
 def oauth_login_url(preserve_path=True, next_url=None):
 	fb_login_uri = ("https://www.facebook.com/dialog/oauth"
@@ -113,59 +112,30 @@ def fb_call(call, args=None):
 def get_home():
 	return 'http://' + request.host + '/'
 
-def get_checkins(username, database, token):
-	checkinOffset = 0
-	offsetInterval=100
-	checkinsTemp = []
-	checkins = []
+def get_username(token):
+	return fb_call('me', args={'access_token':token})['username']
+
+def get_friend_count(token):
+	return int(fql("SELECT friend_count FROM user WHERE uid=me()", token)['data'][0]['friend_count'])
 	
-	query1 = "\"query1\":\"SELECT uid2 FROM friend WHERE uid1=me() LIMIT %s" % offsetInterval
-	query2 = "\"query2\":\"SELECT page_id, author_uid FROM checkin WHERE author_uid IN (SELECT uid2 FROM #query1)\""
-	query3 = "\"query3\":\"SELECT name FROM place WHERE page_id IN (SELECT page_id FROM #query2)\""
+def fql_url(fql, token, limit, offset):
+	args = {}
+	args["q"], args["access_token"] = fql, token
+	return "https://graph.facebook.com/fql?" + urllib.urlencode(args)
 	
-	if not database.find_one({'username':username}):
-		while checkinsTemp or checkinOffset == 0:	
-			checkinsTemp = fql("{%s OFFSET %s\",%s}" % (query1, checkinOffset, query2), token)['data'][1]['fql_result_set']
-			checkins+=checkinsTemp
-			checkinOffset+=offsetInterval
-		
-		database.insert({'username':username, 'checkins':checkins})
-	else:
-		pass
-	
-	return database.find_one({'username':username})['checkins']
- 	
-def sort_checkins(checkins_unsorted):
-	checkins_tuple=[]
-	for checkin in checkins_unsorted:
-		checkins_tuple.append((checkin['page_id'], checkin['author_uid']))
-
-	checkins_sorted={}
-	d = defaultdict(list)
-
-	for k, v in checkins_tuple:
-		if not str(v) in d[str(k)]:
-			d[str(k)].append(str(v))
-
-	return dict(d)
-
-def get_info(info, token):
-	return fb_call('me', args={'access_token':token})[info]
-
-
 @app.route('/', methods=['GET', 'POST'])
 def welcome():
 	if request.args.get('code', None):
 		access_token = fbapi_auth(request.args.get('code'))[0]
-		username = get_info('username', access_token)
-		database = connect_to_database()
-		checkinCollection = database.checkins
-		checkins = get_checkins(username, checkinCollection, access_token)
-		checkinsSorted = sort_checkins(checkins)
 		
-		return Template(filename='templates/index.html').render(name=username, checkinsSorted = checkinsSorted)
+		username = get_username(access_token)
+		friendCount = get_friend_count(access_token)
+		for i in xrange(0, friendCount, 20):
+			redisQueue.enqueue(AggregateCheckins, username, access_token, 20, i)
+		
+		return Template(filename='templates/index.html').render(name=username)
 	else:
-		return Template(filename='templates/welcome.html').render()
+		return redirect(oauth_login_url(next_url=get_home()))
 		
 @app.route('/login/', methods=['GET', 'POST'])
 def login():
@@ -180,6 +150,11 @@ def close():
 def handle_facebook_requests():
 	pass
 	
+@app.route('/callback/', methods=['GET', 'POST'])
+def respond_to_callback():
+	if request.method == 'POST' and request.args.get('code') == os.environ.get('CALLBACK_TOKEN'):
+		status = request.args.get('status')
+		print "status: %s" % status
 
 if __name__ == '__main__':
 	port = int(os.environ.get("PORT", 5000))
