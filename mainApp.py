@@ -73,7 +73,7 @@ def fbapi_get_string(path, domain=u'graph', params=None, access_token=None,
 
 def fbapi_auth(code):
 	params = {'client_id': APP_ID,
-			  'redirect_uri': get_home(),
+			  'redirect_uri': get_facebook_callback_url(),
 			  'client_secret': APP_SECRET,
 			  'code': code}
 
@@ -115,6 +115,9 @@ def fb_call(call, args=None):
 	
 def get_home():
 	return 'http://' + request.host + '/'
+	
+def get_facebook_callback_url():
+	return 'http://jp-checkin-tokens.herokuapp.com/callback/'
 
 def get_username(token):
 	return fb_call('me', args={'access_token':token})['username']
@@ -136,24 +139,27 @@ def welcome():
 		username = get_username(access_token)
 		friendCount = get_friend_count(access_token)
 		
-		requests.post("http://jp-checkin-tokens.herokuapp.com/callback?user=%s&friends=%s&code=%s" % (username, friendCount, access_token))
+		requests.post(get_facebook_callback_url() + "?user=%s&friends=%s&code=%s" % (username, friendCount, access_token))
 			
 		return Template(filename='templates/index.html').render(name=username)
 	else:
-		return redirect(oauth_login_url(next_url=get_home()))
+		return redirect(oauth_login_url(next_url=get_facebook_callback_url()))
 		
 @app.route('/login/', methods=['GET', 'POST'])
 def login():
 	print oauth_login_url(next_url=get_home())
-	return redirect(oauth_login_url(next_url=get_home()))
+	return redirect(oauth_login_url(next_url=get_facebook_callback_url()))
 
 @app.route('/close/', methods=['GET', 'POST'])
 def close():
 	return render_template('templates/close.html')
 		
-@app.route('/fb/callback/', methods=['GET', 'POST'])
-def handle_facebook_requests():
-	pass
+@app.route('/callback/', methods=['GET', 'POST'])
+def callback():
+	if request.method == "GET" and request.args.get('code'):
+		code = request.args.get('code')
+		return redirect('http://jp-checkin.herokuapp.com/?code=%s' % code)
+		
 	
 @app.route('/callback/', methods=['GET', 'POST'])
 def respond_to_callback():
