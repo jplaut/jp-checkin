@@ -125,25 +125,18 @@ def get_username(token):
 def get_friend_count(token):
 	return int(fql("SELECT friend_count FROM user WHERE uid=me()", token)['data'][0]['friend_count'])
 	
-def fql_url(fql, token, limit, offset):
-	args = {}
-	args["q"], args["access_token"] = fql, token
-	return "https://graph.facebook.com/fql?" + urllib.urlencode(args)
-	
 @app.route('/', methods=['GET', 'POST'])
 def welcome():
 	if request.args.get('code', None):
-		app_token = request.args.get('code')
-		access_token = fbapi_auth(app_token)[0]
-		
+		access_token = fbapi_auth(request.args.get('code'))[0]
 		username = get_username(access_token)
 		friendCount = get_friend_count(access_token)
 		
-		requests.post(get_facebook_callback_url() + "?user=%s&friends=%s&code=%s" % (username, friendCount, access_token))
+		requests.post(get_facebook_callback_url() + "?user=%s&friends=%s" % (username, friendCount))
 			
 		return Template(filename='templates/index.html').render(name=username)
 	else:
-		return redirect(oauth_login_url(next_url='http://jp-checkin.herokuapp.com/callback/'))
+		return redirect(oauth_login_url(next_url='http://jp-checkin.herokuapp.com/'))
 		
 @app.route('/login/', methods=['GET', 'POST'])
 def login():
