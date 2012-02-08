@@ -12,10 +12,13 @@ DBNAME=environ.get('MONGODBDATABASE')
 connection = pymongo.Connection(DBPATH)
 db = connection[DBNAME]
 
-redisServer = environ.get("REDIS_QUEUE_SERVER")
+redisHost = environ.get("REDIS_QUEUE_HOST")
+redisPort = int(environ.get("REDIS_QUEUE_PORT"))
 redisPassword = environ.get("REDIS_QUEUE_PASSWORD")
 
-redisQueue = pyres.ResQ(redisServer, redisPassword)
+redisObject = redis.Redis(host=redisHost, port=redisPort, password=redisPassword)
+
+redisQueue = pyres.ResQ(redisObject)
 
 def fql(fql, token, args=None):
 	if not args:

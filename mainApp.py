@@ -8,6 +8,7 @@ from collections import defaultdict
 import pymongo
 from flask import Flask, request, redirect, url_for
 from mako.template import Template
+import redis
 import pyres
 from tasks import *
 
@@ -22,10 +23,13 @@ else:
 APP_ID = os.environ.get('FACEBOOK_APP_ID')
 APP_SECRET = os.environ.get('FACEBOOK_SECRET')
 
-redisServer = os.environ.get("REDIS_QUEUE_SERVER")
+redisHost = os.environ.get("REDIS_QUEUE_HOST")
+redisPort = int(os.environ.get("REDIS_QUEUE_PORT"))
 redisPassword = os.environ.get("REDIS_QUEUE_PASSWORD")
 
-redisQueue = pyres.ResQ(redisServer, redisPassword)
+redisObject = redis.Redis(host=redisHost, port=redisPort, password=redisPassword)
+
+redisQueue = pyres.ResQ(redisObject)
 
 def oauth_login_url(preserve_path=True, next_url=None):
 	fb_login_uri = ("https://www.facebook.com/dialog/oauth"
