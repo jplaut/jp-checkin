@@ -4,7 +4,6 @@ import simplejson as json
 import urllib
 import urllib2
 from collections import defaultdict
-import requests
 
 import pymongo
 from flask import Flask, request, redirect, url_for
