@@ -117,7 +117,7 @@ def get_home():
 	return 'http://' + request.host + '/'
 	
 def get_facebook_callback_url():
-	return 'http://jp-checkin-tokens.herokuapp.com/callback/'
+	return 'http://jp-checkin.herokuapp.com/callback/'
 
 def get_username(token):
 	return fb_call('me', args={'access_token':token})['username']
@@ -132,11 +132,11 @@ def welcome():
 		username = get_username(access_token)
 		friendCount = get_friend_count(access_token)
 		
-		requests.post(get_facebook_callback_url() + "?user=%s&friends=%s" % (username, friendCount))
+		requests.post("http://jp-checkin-tokens.herokuapp.com/callback/?user=%s&friends=%s" % (username, friendCount))
 			
 		return Template(filename='templates/index.html').render(name=username)
 	else:
-		return redirect(oauth_login_url(next_url='http://jp-checkin.herokuapp.com/'))
+		return redirect(oauth_login_url(next_url=get_facebook_callback_url()))
 		
 @app.route('/login/', methods=['GET', 'POST'])
 def login():
@@ -151,7 +151,7 @@ def close():
 def callback():
 	if request.method == "GET" and request.args.get('code'):
 		code = request.args.get('code')
-		return redirect('http://jp-checkin.herokuapp.com/?code=%s' % code)
+		return redirect(get_facebook_callback_url() + '?code=%s' % code)
 		
 	
 @app.route('/callback/', methods=['GET', 'POST'])
