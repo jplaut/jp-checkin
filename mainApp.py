@@ -127,8 +127,6 @@ def fql_url(fql, token, limit, offset):
 	args["q"], args["access_token"] = fql, token
 	return "https://graph.facebook.com/fql?" + urllib.urlencode(args)
 	
-def 
-	
 @app.route('/', methods=['GET', 'POST'])
 def welcome():
 	if request.args.get('code', None):
