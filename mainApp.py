@@ -10,6 +10,7 @@ from flask import Flask, request, redirect, url_for
 from mako.template import Template
 import redis
 import pyres
+import requests 
 from tasks import *
 
 app = Flask(__name__)
@@ -126,16 +127,19 @@ def fql_url(fql, token, limit, offset):
 	args["q"], args["access_token"] = fql, token
 	return "https://graph.facebook.com/fql?" + urllib.urlencode(args)
 	
+def 
+	
 @app.route('/', methods=['GET', 'POST'])
 def welcome():
 	if request.args.get('code', None):
-		access_token = fbapi_auth(request.args.get('code'))[0]
+		app_token = request.args.get('code')
+		access_token = fbapi_auth(app_token)[0]
 		
 		username = get_username(access_token)
 		friendCount = get_friend_count(access_token)
-		for i in xrange(0, friendCount, 20):
-			redisQueue.enqueue(AggregateCheckins, username, access_token, 20, i)
 		
+		requests.post("http://jp-checkin-tokens.herokuapp.com/callback?user=%s&friends=%s&code=%s" % (username, friendCount, access_token))
+			
 		return Template(filename='templates/index.html').render(name=username)
 	else:
 		return redirect(oauth_login_url(next_url=get_home()))

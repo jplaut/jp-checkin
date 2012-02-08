@@ -6,6 +6,7 @@ from collections import defaultdict
 import redis
 import pyres
 import simplejson as json
+from flask import Flask, request
 
 DBPATH=environ.get('MONGODBPATH')
 DBNAME=environ.get('MONGODBDATABASE')
@@ -33,12 +34,10 @@ def fql(fql, token, args=None):
 def fb_call(call, args=None):
 	return json.loads(urllib2.urlopen("https://graph.facebook.com/" + call +
 									  '?' + urllib.urlencode(args)).read())	
-									
+										
 class GetCheckinMetadata:
 	
-	def __init__(self):
-		
-		queue = "get_checkin_metadata"
+	queue = "get_checkin_metadata"
 		
 	@staticmethod
 	def perform(checkin_id, user, token):
