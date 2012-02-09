@@ -117,7 +117,7 @@ def get_home():
 	return 'http://' + request.host + '/'
 	
 def get_facebook_callback_url():
-	return 'http://localhost:5000/'
+	return 'http://jp-checkin.herokuapp.com/'
 
 def get_username(token):
 	return fb_call('me', args={'access_token':token})['username']
@@ -131,13 +131,12 @@ def welcome():
 		access_token = fbapi_auth(request.args.get('code'))[0]
 		username = get_username(access_token)
 		friendCount = get_friend_count(access_token)
-		firstOffset = friendCount/2
-		secondOffset = friendCount - firstOffset
+		offset = friendCount/2
 		interval = 20
 		
-		requests.post("http://localhost:8000/callback/")
+		requests.post("http://jp-checkin-tokens.herokuapp.com/callback/")
 		
-		for i in xrange(0, firstOffset, interval):
+		for i in xrange(0, offset, interval):
 			redisQueue.enqueue(AggregateCheckins, username, access_token, interval, i)
 			
 		return Template(filename='templates/index.html').render(name=username)
