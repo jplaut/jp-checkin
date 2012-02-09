@@ -117,7 +117,7 @@ def get_home():
 	return 'http://' + request.host + '/'
 	
 def get_facebook_callback_url():
-	return 'http://jp-checkin.herokuapp.com/'
+	return 'http://localhost:5000/'
 
 def get_username(token):
 	return fb_call('me', args={'access_token':token})['username']
@@ -131,8 +131,14 @@ def welcome():
 		access_token = fbapi_auth(request.args.get('code'))[0]
 		username = get_username(access_token)
 		friendCount = get_friend_count(access_token)
+		firstOffset = friendCount/2
+		secondOffset = friendCount - firstOffset
+		interval = 20
 		
-		requests.post("http://jp-checkin-tokens.herokuapp.com/callback/?user=%s&friends=%s" % (username, friendCount))
+		requests.post("http://localhost:8000/callback/")
+		
+		for i in xrange(0, firstOffset, interval):
+			redisQueue.enqueue(AggregateCheckins, username, access_token, interval, i)
 			
 		return Template(filename='templates/index.html').render(name=username)
 	else:
@@ -153,12 +159,6 @@ def callback():
 		code = request.args.get('code')
 		return redirect(get_facebook_callback_url() + '?code=%s' % code)
 		
-	
-@app.route('/callback/', methods=['GET', 'POST'])
-def respond_to_callback():
-	if request.method == 'POST' and request.args.get('code') == os.environ.get('CALLBACK_TOKEN'):
-		status = request.args.get('status')
-		print "status: %s" % status
 
 if __name__ == '__main__':
 	port = int(os.environ.get("PORT", 5000))
