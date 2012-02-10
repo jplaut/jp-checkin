@@ -35,21 +35,31 @@ def fb_call(call, args=None):
 	return json.loads(urllib2.urlopen("https://graph.facebook.com/" + call +
 									  '?' + urllib.urlencode(args)).read())	
 						
-					
+class GetFriends:
+	
+	queue = "get_friends"
+	
+	@staticmethod	
+	def perform(user, offset, limit, token):
+		
+		friends = fql("SELECT uid2 FROM friend WHERE uid1=me()", token, args={'limit':limit, 'offset':offset})
+		
+		for friend in friends['data']:
+			redisQueue.enqueue(AggregateCheckins, user, friend['uid2'], token)
+						
 class AggregateCheckins:
 	
 	queue = "aggregate_checkins"
 		
 	@staticmethod	
-	def perform(user, token, limit, offset):
+	def perform(user, friend, token):
 		checkin_metadata = {}
 		collection = db[user]
 		
-		friends = fql("SELECT uid2 FROM friend WHERE uid1=me() LIMIT %s OFFSET %s" % (limit, offset), token)
+		checkins = fb_call('checkins?id=%s' % friend, args={'limit':2000, 'access_token':token})
 		
-		for friend in friends['data']:
-			checkins = fb_call(friend['uid2'] + '/checkins', args={'limit':2000, 'access_token':token})
-			for checkin in checkins['data']:
+		for checkin in checkins['data']:
+			if 'id' in checkin:
 				if 'from' in checkin:
 					if 'name' in checkin['from']:
 						checkin_metadata['author_name'] = checkin['from']['name']
@@ -66,4 +76,6 @@ class AggregateCheckins:
 						checkin_metadata['place_city'] = checkin['place']['location']
 				
 				collection.insert(checkin_metadata)
+			else:
+				pass
 	

@@ -137,7 +137,7 @@ def welcome():
 		requests.post("http://jp-checkin-tokens.herokuapp.com/callback/")
 		
 		for i in xrange(0, offset, interval):
-			redisQueue.enqueue(AggregateCheckins, username, access_token, interval, i)
+			redisQueue.enqueue(GetFriends, username, i, interval, access_token)
 			
 		return Template(filename='templates/index.html').render(name=username)
 	else:
