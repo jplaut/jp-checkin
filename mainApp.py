@@ -131,12 +131,9 @@ def welcome():
 		access_token = fbapi_auth(request.args.get('code'))[0]
 		username = get_username(access_token)
 		friendCount = get_friend_count(access_token)
-		offset = friendCount/2
 		interval = 20
-		
-		requests.post("http://jp-checkin-tokens.herokuapp.com/callback/")
-		
-		for i in xrange(0, offset, interval):
+
+		for i in xrange(0, friendCount, interval):
 			redisQueue.enqueue(GetFriends, username, i, interval, access_token)
 			
 		return Template(filename='templates/index.html').render(name=username)
