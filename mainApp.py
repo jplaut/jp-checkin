@@ -127,14 +127,24 @@ def get_friend_count(token):
 	
 @app.route('/', methods=['GET', 'POST'])
 def welcome():
+	
 	if request.args.get('code', None):
 		access_token = fbapi_auth(request.args.get('code'))[0]
+		
+		if request.args.get('token_number', None):
+			tokenNumber = request.args.get('token_number')
+		else:
+			tokenNumber = 0
+			
 		username = get_username(access_token)
 		friendCount = get_friend_count(access_token)
-		interval = 20
+		getFriendsInterval = 500
+		getFriendsOffset = getFriendsInterval * tokenNumber
+		getCheckinInterval = 20
 
-		for i in xrange(0, friendCount, interval):
-			redisQueue.enqueue(GetFriends, username, i, interval, access_token)
+		for i in xrange(getFriendsOffset, getFriendsOffset+getFriendsInterval, interval):
+			redisQueue.enqueue(GetFriends, username, access_token)
+		redisQueue.enqueue(GetNewToken, tokenNumber+1)
 			
 		return Template(filename='templates/index.html').render(name=username)
 	else:
