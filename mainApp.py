@@ -142,8 +142,8 @@ def welcome():
 		getFriendsOffset = getFriendsInterval * tokenNumber
 		getCheckinInterval = 20
 
-		for i in xrange(getFriendsOffset, getFriendsOffset+getFriendsInterval, interval):
-			redisQueue.enqueue(GetFriends, username, access_token)
+		for i in xrange(getFriendsOffset, getFriendsOffset+getFriendsInterval, getCheckinInterval):
+			redisQueue.enqueue(GetFriends, username, getCheckinInterval, i, access_token)
 		redisQueue.enqueue(GetNewToken, tokenNumber+1)
 			
 		return Template(filename='templates/index.html').render(name=username)
