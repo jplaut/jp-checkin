@@ -10,6 +10,7 @@ import redis
 import pyres
 import requests
 
+
 APP_ID = environ.get('FACEBOOK_APP_ID')
 APP_SECRET = environ.get('FACEBOOK_SECRET')
 
@@ -37,7 +38,7 @@ def oauth_login_url(preserve_path=True, next_url=None):
 	return fb_login_uri
 	
 def get_facebook_callback_url(tokenNumber):
-	return url_for('/') + '?token_number=%s' % tokenNumber
+	return 'http://jp-checkin.herokuapp.com/?token_number=%s' % tokenNumber
 	
 def fql(fql, token, args=None):
 	if not args:
