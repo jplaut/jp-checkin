@@ -4,6 +4,7 @@ import simplejson as json
 import urllib
 import urllib2
 from collections import defaultdict
+import math
 
 import pymongo
 from flask import Flask, request, redirect, url_for, jsonify
@@ -140,14 +141,20 @@ def welcome():
 		friendCount = get_friend_count(access_token)
 		tokenInterval = 500
 		friendOffset = tokenInterval * tokenNumber
+		numberOfTokens = math.ceil(friendCount/float(tokenInterval))
 		friendInterval = 20
 		lastCall = friendOffset+tokenInterval-friendInterval
-
-		for i in xrange(friendOffset, friendCount-friendInterval, friendInterval):
-			redisQueue.enqueue(GetFriends, username, friendInterval, i, access_token)
-		redisQueue.enqueue(GetFriends, username, friendInterval, i, access_token, 1)	
 		
-		#redisQueue.enqueue(GetNewToken, tokenNumber+1)
+		for j in xrange(numberOfTokens):
+			if j<numberOfTokens-1:
+				for i in xrange(tokenInterval*j, tokenInterval*(j+1), friendInterval):
+					redisQueue.enqueue(GetFriends, username, friendInterval, i, access_token)
+			else:
+				for i in xrange(tokenInterval*j, tokenInterval*(j+1)-friendInterval, friendInterval):
+					redisQueue.enqueue(GetFriends, username, friendInterval, i, access_token)
+				redisQueue.enqueue(GetFriends, username, friendInterval, i, access_token, 1)
+			
+			redisQueue.enqueue(GetNewToken, tokenNumber+1)
 		
 			
 		return Template(filename='templates/index.html').render(name=username)

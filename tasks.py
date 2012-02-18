@@ -63,6 +63,7 @@ def get_state_name(abrv):
 	'CA':'California', 
 	'CO':'Colorado', 
 	'CT':'Connecticut', 
+	'DC':'Washington DC',
 	'DE':'Delaware', 
 	'FL':'Florida', 
 	'GA':'Georgia', 
@@ -222,8 +223,9 @@ class MoveCheckinToDatabase:
 					if 'state' in checkin['place']['location']:
 						checkin_metadata['state_abrv'] = checkin['place']['location']['state']
 						checkin_metadata['state_abrv_lower'] = checkin_metadata['state_abrv'].lower()
-						checkin_metadata['state'] = get_state_name(checkin_metadata['state_abrv'])
-						checkin_metadata['state_lower'] = checkin_metadata['state'].lower()
+						if get_state_name(checkin_metadata['state_abrv']):
+							checkin_metadata['state'] = get_state_name(checkin_metadata['state_abrv'])
+							checkin_metadata['state_lower'] = checkin_metadata['state'].lower()
 
 
 			collection.insert(checkin_metadata)
