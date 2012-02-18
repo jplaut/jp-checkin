@@ -6,7 +6,7 @@ import urllib2
 from collections import defaultdict
 
 import pymongo
-from flask import Flask, request, redirect, url_for
+from flask import Flask, request, redirect, url_for, jsonify
 from mako.template import Template
 import redis
 import pyres
@@ -117,7 +117,7 @@ def get_home():
 	return 'http://' + request.host + '/'
 	
 def get_facebook_callback_url():
-	return 'http://jp-checkin.herokuapp.com/'
+	return url_for('/')
 
 def get_username(token):
 	return fb_call('me', args={'access_token':token})['username']
@@ -138,13 +138,17 @@ def welcome():
 			
 		username = get_username(access_token)
 		friendCount = get_friend_count(access_token)
-		getFriendsInterval = 500
-		getFriendsOffset = getFriendsInterval * tokenNumber
-		getCheckinInterval = 20
+		tokenInterval = 500
+		friendOffset = tokenInterval * tokenNumber
+		friendInterval = 20
+		lastCall = friendOffset+tokenInterval-friendInterval
 
-		for i in xrange(getFriendsOffset, getFriendsOffset+getFriendsInterval, getCheckinInterval):
-			redisQueue.enqueue(GetFriends, username, getCheckinInterval, i, access_token)
-		redisQueue.enqueue(GetNewToken, tokenNumber+1)
+		for i in xrange(friendOffset, friendCount-friendInterval, friendInterval):
+			redisQueue.enqueue(GetFriends, username, friendInterval, i, access_token)
+		redisQueue.enqueue(GetFriends, username, friendInterval, i, access_token, 1)	
+		
+		#redisQueue.enqueue(GetNewToken, tokenNumber+1)
+		
 			
 		return Template(filename='templates/index.html').render(name=username)
 	else:
@@ -158,6 +162,16 @@ def login():
 @app.route('/close/', methods=['GET', 'POST'])
 def close():
 	return render_template('templates/close.html')
+
+@app.route('/_checkstatus/', methods=['POST'])
+def check_status():
+	user = request.args.get('user')
+	
+	if redisObject.get(user) == 1:
+		redisObject.delete(user)
+		return jsonify(state=1)
+	else:
+		return jsonify(state=0)
 		
 @app.route('/callback/', methods=['GET', 'POST'])
 def callback():

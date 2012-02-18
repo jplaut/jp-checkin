@@ -5,11 +5,23 @@
 <head>
 	<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
 	<title>Checkin Aggregator</title>
-	<meta name="generator" content="TextMate http://macromates.com/">
-	<meta name="author" content="Jonathan Plaut">
-	<!-- Date: 2012-01-17 -->
+	
+	<link rel=stylesheet href='../static/base.css' type='text/css' media=screen>
+	
+	<script type='text/javascript' src='../jquery.min.js'></script>
+	
+	<script type='text/javascript'>
+		function createLinks(json) {
+			for (i=0; i<json.length; i++) {
+				$("#linkList").
+			}
+		}
+	</script>
 </head>
 <body>
 	<h1>Welcome, ${name}!</h1>
+	<div id='appWrapper'>
+	<div id='links'><ul id='linkList'></ul></div>
+	</div>
 </body>
 </html>

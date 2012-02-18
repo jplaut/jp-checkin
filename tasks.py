@@ -10,6 +10,8 @@ import redis
 import pyres
 import requests
 
+APP_ID = environ.get('FACEBOOK_APP_ID')
+APP_SECRET = environ.get('FACEBOOK_SECRET')
 
 DBPATH=environ.get('MONGODBPATH')
 DBNAME=environ.get('MONGODBDATABASE')
@@ -35,7 +37,7 @@ def oauth_login_url(preserve_path=True, next_url=None):
 	return fb_login_uri
 	
 def get_facebook_callback_url(tokenNumber):
-	return 'http://jp-checkin.herokuapp.com/?token_number=%s' % tokenNumber
+	return url_for('/') + '?token_number=%s' % tokenNumber
 	
 def fql(fql, token, args=None):
 	if not args:
@@ -50,7 +52,65 @@ def fql(fql, token, args=None):
 def fb_call(call, args=None):
 	return json.loads(urllib2.urlopen("https://graph.facebook.com/" + call +
 									  '?' + urllib.urlencode(args)).read())
-											
+									
+def get_state_name(abrv):
+	statesDict = {
+	'AL':'Alabama', 
+	'AK':'Alaska', 
+	'AZ':'Arizona', 
+	'AR':'Arkansas', 
+	'CA':'California', 
+	'CO':'Colorado', 
+	'CT':'Connecticut', 
+	'DE':'Delaware', 
+	'FL':'Florida', 
+	'GA':'Georgia', 
+	'HI':'Hawaii', 
+	'ID':'Idaho', 
+	'IL':'Illinois', 
+	'IN':'Indiana', 
+	'IA':'Iowa', 
+	'KS':'Kansas', 
+	'KY':'Kentucky', 
+	'LA':'Louisiana', 
+	'ME':'Maine', 
+	'MD':'Maryland', 
+	'MA':'Massachusetts', 
+	'MI':'Michigan', 
+	'MN':'Minnesota', 
+	'MS':'Mississippi', 
+	'MO':'Missouri', 
+	'MT':'Montana', 
+	'NE':'Nebraska', 
+	'NV':'Nevada', 
+	'NH':'New Hampshire', 
+	'NJ':'New Jersey', 
+	'NM':'New Mexico', 
+	'NY':'New York', 
+	'NC':'North Carolina', 
+	'ND':'North Dakota', 
+	'OH':'Ohio', 
+	'OK':'Oklahoma', 
+	'OR':'Oregon', 
+	'PA':'Pennsylvania', 
+	'RI':'Rhode Island', 
+	'SC':'South Carolina', 
+	'SD':'South Dakota', 
+	'TN':'Tennessee', 
+	'TX':'Texas', 
+	'UT':'Utah', 
+	'VT':'Vermont', 
+	'VA':'Virginia', 
+	'WA':'Washington', 
+	'WV':'West Virginia', 
+	'WI':'Wisconsin', 
+	'WY':'Wyoming'
+	}
+	
+	if abrv in statesDict:
+		return statesDict[abrv]
+	else:
+		return None
 
 class GetNewToken:
 	queue = "*"
@@ -64,7 +124,7 @@ class GetFriends:
 	queue = "*"
 	
 	@staticmethod	
-	def perform(user, limit, offset, token):
+	def perform(user, limit, offset, token, last=0):
 		friendsArray = []
 		
 		friendsRaw = fql("SELECT uid2 FROM friend WHERE uid1=me() LIMIT %s OFFSET %s" % (limit, offset), token)
@@ -72,15 +132,15 @@ class GetFriends:
 		for friend in friendsRaw['data']:
 			friendsArray.append(friend['uid2'])
 		
-		redisQueue.enqueue(AggregateCheckins, user, friendsArray, token)
+		redisQueue.enqueue(GetCheckinsPerFriend, user, friendsArray, token, last)
 			
 						
-class AggregateCheckins:
+class GetCheckinsPerFriend:
 	
 	queue = "*"
 		
 	@staticmethod	
-	def perform(user, friends, token):
+	def perform(user, friends, token, last):
 		
 		baseURL = "https://graph.facebook.com/"
 		batch = ""
@@ -94,20 +154,43 @@ class AggregateCheckins:
 		
 		dataJSON = json.loads(r.text)
 		
+		if not last:
+			for person in dataJSON:
+				redisQueue.enqueue(GetIndividualCheckins, person, user)
+		else:
+			for person in dataJSON[0:len(dataJSON)-1]:
+				redisQueue.enqueue(GetIndividualCheckins, person, user)
+			redisQueue.enqueue(GetIndividualCheckins, person, user, 1)
+
+					
+class GetIndividualCheckins:
+	
+	queue = "*"
+	
+	@staticmethod
+	def perform(checkins, user, last=0):
+		checkinsJSON = json.loads(checkins['body'])['data']
 		
-		for person in dataJSON:
-			for checkin in json.loads(person['body'])['data']:
+		if not last:
+			for checkin in checkinsJSON:
 				if 'id' in checkin:
 					redisQueue.enqueue(MoveCheckinToDatabase, checkin, user)
 				else:
 					pass
-				
+		else:	
+			for checkin in checkinsJSON[0:len(checkinsJSON)-1]:
+				if 'id' in checkin:
+					redisQueue.enqueue(MoveCheckinToDatabase, checkin, user)
+				else:
+					pass
+			redisQueue.enqueue(MoveCheckinToDatabase, checkinsJSON[-1], user, 1)
+			
 class MoveCheckinToDatabase:
 	
 	queue = "*"
 	
 	@staticmethod
-	def perform(checkin, user):
+	def perform(checkin, user, last=0):
 		checkin_metadata = {}
 		collection = db[user]
 		
@@ -123,18 +206,26 @@ class MoveCheckinToDatabase:
 			if 'message' in checkin:
 				checkin_metadata['comment'] = checkin['message']
 			if 'place' in checkin:
-				if 'location' in checkin['place']:
-					if 'city' in checkin['place']['location']:
-						checkin_metadata['city'] = checkin['place']['location']['city']
-					if 'country' in checkin['place']['location']:
-						checkin_metadata['country'] = checkin['place']['location']['country']
-					if 'state' in checkin['place']['location']:
-						checkin_metadata['state'] = checkin['place']['location']['state']
 				if 'id' in checkin['place']:
 					checkin_metadata['place_id'] = checkin['place']['id']
 				if 'name' in checkin['place']:
 					checkin_metadata['place_name'] = checkin['place']['name']
+					checkin_metadata['place_name_lower'] = checkin_metadata['place_name'].lower()
+				if 'location' in checkin['place']:
+					if 'city' in checkin['place']['location']:
+						checkin_metadata['city'] = checkin['place']['location']['city']
+						checkin_metadata['city_lower'] = checkin_metadata['city'].lower()
+					if 'country' in checkin['place']['location']:
+						checkin_metadata['country'] = checkin['place']['location']['country']
+						checkin_metadata['country_lower'] = checkin_metadata['country'].lower()
+					if 'state' in checkin['place']['location']:
+						checkin_metadata['state_abrv'] = checkin['place']['location']['state']
+						checkin_metadata['state_abrv_lower'] = checkin_metadata['state_abrv'].lower()
+						checkin_metadata['state'] = get_state_name(checkin_metadata['state_abrv'])
+						checkin_metadata['state_lower'] = checkin_metadata['state'].lower()
 
-				collection.insert(checkin_metadata)
+
+			collection.insert(checkin_metadata)
 					
-					
+		if last:
+			redisObject.set(user, 1)			
