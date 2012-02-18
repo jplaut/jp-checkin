@@ -117,7 +117,7 @@ def get_home():
 	return 'http://' + request.host + '/'
 	
 def get_facebook_callback_url():
-	return url_for('/')
+	return 'http://jp-checkin.herokuapp.com/'
 
 def get_username(token):
 	return fb_call('me', args={'access_token':token})['username']
