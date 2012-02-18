@@ -139,7 +139,7 @@ def welcome():
 			
 		username = get_username(access_token)
 		friendCount = get_friend_count(access_token)
-		tokenInterval = 500
+		tokenInterval = 400
 		friendOffset = tokenInterval * tokenNumber
 		numberOfTokens = int(math.ceil(friendCount/float(tokenInterval)))
 		friendInterval = 20
@@ -150,7 +150,7 @@ def welcome():
 				for i in xrange(tokenInterval*j, tokenInterval*(j+1), friendInterval):
 					redisQueue.enqueue(GetFriends, username, friendInterval, i, access_token)
 			else:
-				for i in xrange(tokenInterval*j, tokenInterval*(j+1)-friendInterval, friendInterval):
+				for i in xrange(tokenInterval*j, friendCount-friendInterval, friendInterval):
 					redisQueue.enqueue(GetFriends, username, friendInterval, i, access_token)
 				redisQueue.enqueue(GetFriends, username, friendInterval, i, access_token, 1)
 			
