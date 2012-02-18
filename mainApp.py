@@ -141,7 +141,7 @@ def welcome():
 		friendCount = get_friend_count(access_token)
 		tokenInterval = 500
 		friendOffset = tokenInterval * tokenNumber
-		numberOfTokens = math.ceil(friendCount/float(tokenInterval))
+		numberOfTokens = int(math.ceil(friendCount/float(tokenInterval)))
 		friendInterval = 20
 		lastCall = friendOffset+tokenInterval-friendInterval
 		
