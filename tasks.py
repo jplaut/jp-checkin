@@ -19,13 +19,13 @@ DBNAME=environ.get('MONGODBDATABASE')
 connection = pymongo.Connection(DBPATH)
 db = connection[DBNAME]
 
-redisHost = environ.get("REDIS_QUEUE_HOST")
-redisPort = int(environ.get("REDIS_QUEUE_PORT"))
-redisPassword = environ.get("REDIS_QUEUE_PASSWORD")
+redisServer = redis.Redis(
+						host=environ.get("REDIS_HOST"),
+						port=int(environ.get("REDIS_PORT")),
+						password=environ.get("REDIS_PASSWORD")
+						)
+resq = pyres.ResQ(redisServer)
 
-redisObject = redis.Redis(host=redisHost, port=redisPort, password=redisPassword)
-
-redisQueue = pyres.ResQ(redisObject)
 
 
 def oauth_login_url(preserve_path=True, next_url=None):
@@ -36,9 +36,6 @@ def oauth_login_url(preserve_path=True, next_url=None):
 	if environ.get('FBAPI_SCOPE'):
 		fb_login_uri += "&scope=%s" % environ.get('FBAPI_SCOPE')
 	return fb_login_uri
-	
-def get_facebook_callback_url(tokenNumber):
-	return 'http://jp-checkin.herokuapp.com/?token_number=%s' % tokenNumber
 	
 def fql(fql, token, args=None):
 	if not args:
@@ -114,13 +111,14 @@ def get_state_name(abrv):
 	else:
 		return None
 
-class GetNewToken:
-	queue = "*"
+class PerformLater:
+	queue = "perform_later"
 	
 	@staticmethod
-	def perform(tokenNumber):
-		r = requests.get(oauth_login_url(next_url=get_facebook_callback_url(tokenNumber)))
-									
+	def perform(klass, *args):
+		resq.enqueue(klass, args)
+		
+		
 class GetFriends:
 	
 	queue = "*"
@@ -134,7 +132,7 @@ class GetFriends:
 		for friend in friendsRaw['data']:
 			friendsArray.append(friend['uid2'])
 		
-		redisQueue.enqueue(GetCheckinsPerFriend, user, friendsArray, token, last)
+		resq.enqueue(GetCheckinsPerFriend, user, friendsArray, token, last)
 			
 						
 class GetCheckinsPerFriend:
@@ -142,27 +140,35 @@ class GetCheckinsPerFriend:
 	queue = "*"
 		
 	@staticmethod	
-	def perform(user, friends, token, last):
+	def perform(user, friends, token, last=0):
 		
 		baseURL = "https://graph.facebook.com/"
 		batch = ""
+		friendArray = []
 		for friend in friends:
 			#while friends.index(friend) != len(friends)-1:
 			batch += "{'method':'GET','relative_url':'%s/checkins?limit=3000'}," % friend
-			#batch += "{'method':'GET','relative_url':'%s/checkins'}" % friend
+			friendArray.append(friend)
 		payload = {'batch':'[%s]' % batch, 'method':'post','access_token':token}
 		
 		r = requests.post(baseURL, data=payload)
 		
 		dataJSON = json.loads(r.text)
 		
-		if not last:
-			for person in dataJSON:
-				redisQueue.enqueue(GetIndividualCheckins, person, user)
+		if dataJSON[0]['body'][0:8] != "{\"error\"":
+			if not last:
+				for person in dataJSON:
+					resq.enqueue(GetIndividualCheckins, person, user, friendArray[dataJSON.index(person)])
+			else:
+				for person in dataJSON[0:-1]:
+					resq.enqueue(GetIndividualCheckins, person, user, friendArray[dataJSON.index(person)])
+				resq.enqueue(GetIndividualCheckins, dataJSON[-1], user, friendArray[-1], 1)
 		else:
-			for person in dataJSON[0:len(dataJSON)-1]:
-				redisQueue.enqueue(GetIndividualCheckins, person, user)
-			redisQueue.enqueue(GetIndividualCheckins, person, user, 1)
+			if not last:
+				resq.enqueue(PerformLater, "GetCheckinsPerFriend", user, friends, token)
+			else:
+				resq.enqueue(PerformLater, "GetCheckinsPerFriend", user, friends, token, 1)
+				redisServer.setex(user+":status", 1)
 
 					
 class GetIndividualCheckins:
@@ -170,29 +176,27 @@ class GetIndividualCheckins:
 	queue = "*"
 	
 	@staticmethod
-	def perform(checkins, user, last=0):
+	def perform(checkins, user, friend, last=0):
 		checkinsJSON = json.loads(checkins['body'])['data']
 		
-		if not last:
-			for checkin in checkinsJSON:
-				if 'id' in checkin:
-					redisQueue.enqueue(MoveCheckinToDatabase, checkin, user)
-				else:
-					pass
-		else:	
-			for checkin in checkinsJSON[0:len(checkinsJSON)-1]:
-				if 'id' in checkin:
-					redisQueue.enqueue(MoveCheckinToDatabase, checkin, user)
-				else:
-					pass
-			redisQueue.enqueue(MoveCheckinToDatabase, checkinsJSON[-1], user, 1)
+		for checkin in checkinsJSON:
+			if 'id' in checkin:
+				resq.enqueue(MoveCheckinToDatabase, checkin, user, friend)
+			else:
+				pass
+		
+		if last:
+			if redisServer.get(user+":status") == 1:
+				redisServer.setex(user+":status", 2)
+			else:
+				redisServer.setex(user+":status", 1)
 			
 class MoveCheckinToDatabase:
 	
 	queue = "*"
 	
 	@staticmethod
-	def perform(checkin, user, last=0):
+	def perform(checkin, user, friend):
 		checkin_metadata = {}
 		collection = db[user]
 		
@@ -200,11 +204,16 @@ class MoveCheckinToDatabase:
 			pass
 		else:
 			checkin_metadata['checkin_id'] = checkin['id']
-			if 'from' in checkin:
-				if 'name' in checkin['from']:
-					checkin_metadata['author_name'] = checkin['from']['name']
-				if 'id' in checkin['from']:
-					checkin_metadata['author_uid'] = checkin['from']['id']
+			if 'id' in checkin['from'] and checkin['from']['id'] == friend:
+				checkin_metadata['author_name'] = checkin['from']['name']
+				checkin_metadata['author_uid'] = checkin['from']['id']
+			elif 'tags' in checkin:
+				for personTagged in checkin['tags']:
+					if personTagged['id'] == friend:
+						checkin_metadata['author_name'] = personTagged['name']
+						checkin_metadata['author_uid'] = personTagged['id']
+						checkin_metadata['tagged_by_name'] = checkin['from']['name']
+						checkin_metadata['tagged_by_uid'] = checkin['from']['id']
 			if 'message' in checkin:
 				checkin_metadata['comment'] = checkin['message']
 			if 'place' in checkin:
@@ -228,7 +237,4 @@ class MoveCheckinToDatabase:
 							checkin_metadata['state_lower'] = checkin_metadata['state'].lower()
 
 
-			collection.insert(checkin_metadata)
-					
-		if last:
-			redisObject.set(user, 1)			
+			collection.insert(checkin_metadata)	

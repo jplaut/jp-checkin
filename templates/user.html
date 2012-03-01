@@ -1,0 +1,64 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+	"http://www.w3.org/TR/html4/loose.dtd">
+<html>
+	<head>
+		<meta http-equiv="Content-type" content="text/html; charset=utf-8">
+		% if logged_in:
+			<title>Checkin Browser</title>
+		% else:
+			<title>Validation Error</title>
+		% endif
+		
+		<link rel=stylesheet href='../static/base.css' type='text/css' media=screen />
+		<script type='text/javascript' src='../static/jquery.min.js'></script>	
+	</head>
+	<body>
+		<div id="bodyWrapper">
+			<div id="mainContent">
+				% if logged_in:
+					<div class="logout">
+						<a href="/logout/">Logout</a>
+					</div>
+					<div class="friendsLink">
+					</div>
+					<div id="friendsLink">
+					</div>
+					<div id="linkContainer">
+						<ul id="linkList">
+							% for country in countries:
+								<li><a id="browseLink" href="#" operation="places" field="country" query="${country}">${country}</a></li>
+							% endfor
+						</ul>
+					</div>
+					<div id="test">
+						</div>
+				% else:
+					<div class="error">
+						<p>There was an error validating the request. Please try <a href="${baseURL}">logging in</a> again.</p>
+					</div>
+				% endif		
+			</div>		
+		</div>
+		
+		<script type="text/javascript" charset="utf-8">
+		$("body #browseLink").live(
+			"click",
+				function browseData(event) {
+					$.post(
+						"/ajax/?op=" + $(this).attr("operation") + "&field=" + $(this).attr("field") + "&q=" + $(this).attr("query"),
+						function (result) {
+							if (!result.error) {
+								$("#friendsLink").empty().append(result.data.friendsLink);
+								$("#linkList").empty().append(result.data.links);
+							}
+							else {
+								$("#friendsLink").empty();
+								$("#linkList").empty().append(result.error);
+							}
+						},
+						"json");
+					}	
+				)
+		</script>
+	</body>
+</html>

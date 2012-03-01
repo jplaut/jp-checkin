@@ -6,22 +6,32 @@
 	<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
 	<title>Checkin Aggregator</title>
 	
-	<link rel=stylesheet href='../static/base.css' type='text/css' media=screen>
+	<link rel=stylesheet href='../static/base.css' type='text/css' media=screen />
 	
-	<script type='text/javascript' src='../jquery.min.js'></script>
+	<script type='text/javascript' src='/static/jquery.min.js'></script>
 	
 	<script type='text/javascript'>
-		function createLinks(json) {
-			for (i=0; i<json.length; i++) {
-				$("#linkList").
-			}
+		function createLinks(links) {
+			$("#linkList").empty();
+			$("#linkList").append(links);
 		}
 	</script>
 </head>
 <body>
-	<h1>Welcome, ${name}!</h1>
-	<div id='appWrapper'>
-	<div id='links'><ul id='linkList'></ul></div>
+	<div id="bodyWrapper">
+		% if logged_in == False:
+			<div id="mainContent">
+				<h1>Welcome to Checkin Aggregator.</h1>
+				<a href="${facebook_auth_url}">Login with Facebook</a>
+			</div>
+		% else:
+		<div id="loadingOverlay">
+			<div id="loadingWrapper">
+				<h3>Since this is your first time accessing the app, we have to gather your data. Please be patient. This shouldn't take long.</h3>
+				<img src="../static/images/ajax-loader.gif" />
+			</div>
+		</div>	
+		% endif
 	</div>
 </body>
 </html>

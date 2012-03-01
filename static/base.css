@@ -1,6 +1,41 @@
+body {
+	font-family: Trebuchet, Tahoma, sans-serif;
+	margin: 0px;
+}
+#bodyWrapper {
+	width: 100%;
+	height: 100%;
+}
 #appWrapper {
 	margin: 50px auto;
 	border: 1px solid #ccc;
 	width: 500px;
 	height: 600px;
+}
+#loadingOverlay {
+	background-color: #29737a;
+	opacity: 0.93;
+	width: 100%;
+	height: 100%;
+	position: absolute;
+}
+
+#loadingWrapper {
+	margin: 50px auto;
+	width: 600px;
+	text-align: center;
+}
+
+#loadingWrapper h3 {
+	opacity: 1;
+	color: #111;
+}
+#mainContent p {
+	margin: 0;
+}
+.welcome {
+	padding: 20px;
+}
+.welcome h1 {
+	margin: 0;
 }

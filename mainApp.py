@@ -5,15 +5,18 @@ import urllib
 import urllib2
 from collections import defaultdict
 import math
+import random
+import time
 
 import pymongo
-from flask import Flask, request, redirect, url_for, jsonify
+from flask import Flask, request, redirect, url_for, jsonify, make_response
 from mako.template import Template
 import redis
 import pyres
 import requests 
 from tasks import *
 
+#CONFIGURE FLASK
 app = Flask(__name__)
 app.config.from_object(__name__)
 
@@ -25,14 +28,21 @@ else:
 APP_ID = os.environ.get('FACEBOOK_APP_ID')
 APP_SECRET = os.environ.get('FACEBOOK_SECRET')
 
-redisHost = os.environ.get("REDIS_QUEUE_HOST")
-redisPort = int(os.environ.get("REDIS_QUEUE_PORT"))
-redisPassword = os.environ.get("REDIS_QUEUE_PASSWORD")
+#CONFIGURE MONGODB
+DBPATH=environ.get('MONGODBPATH')
+DBNAME=environ.get('MONGODBDATABASE')
+connection = pymongo.Connection(DBPATH)
+db = connection[DBNAME]
 
-redisObject = redis.Redis(host=redisHost, port=redisPort, password=redisPassword)
+#CONFIGURE REDIS
+redisServer = redis.Redis(
+						host=environ.get("REDIS_HOST"),
+						port=int(environ.get("REDIS_PORT")),
+						password=environ.get("REDIS_PASSWORD")
+						)
+resq = pyres.ResQ(redisServer)
 
-redisQueue = pyres.ResQ(redisObject)
-
+#APP METHODS
 def oauth_login_url(preserve_path=True, next_url=None):
 	fb_login_uri = ("https://www.facebook.com/dialog/oauth"
 					"?client_id=%s&redirect_uri=%s" %
@@ -74,7 +84,7 @@ def fbapi_get_string(path, domain=u'graph', params=None, access_token=None,
 
 def fbapi_auth(code):
 	params = {'client_id': APP_ID,
-			  'redirect_uri': get_facebook_callback_url(),
+			  'redirect_uri': get_base_url(),
 			  'client_secret': APP_SECRET,
 			  'code': code}
 
@@ -117,76 +127,185 @@ def fb_call(call, args=None):
 def get_home():
 	return 'http://' + request.host + '/'
 	
-def get_facebook_callback_url():
-	return 'http://jp-checkin.herokuapp.com/'
+def get_base_url():
+	return 'http://localhost:5000/'
 
-def get_username(token):
-	return fb_call('me', args={'access_token':token})['username']
+def get_user_info(token):
+	return fb_call('me', args={'access_token':token})
 
 def get_friend_count(token):
 	return int(fql("SELECT friend_count FROM user WHERE uid=me()", token)['data'][0]['friend_count'])
+
+def get_next_field(field, query=""):
+	fields = [
+			"country",
+			"state",
+			"city",
+			"place_name"	
+			]
 	
+	if field == "country":
+		if query == "United States":
+			return "state"
+		else:
+			return "city"
+	else:	
+		if field in fields:
+			return fields[fields.index(field)+1]
+		else:
+			return None
+		
+def create_session_id():
+	x = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+_-'
+	sessID = ''.join(random.sample(x, 40)) + '=='
+	return sessID
+	
+def return_browse_data(user, operation, field, query):
+	collection = db[user]
+	body = {}
+	body['data'] = {}
+	body['data']['links'] = ""
+	
+	if operation == "friends":
+		distinct = "author_name"
+	else:
+		distinct = get_next_field(field, query)
+	
+	for elem in sorted(collection.find({field:query}).distinct(distinct)):
+		body['data']['links'] += "<li><a id=\"browseLink\" href=\"#\" operation=\"%s\" field=\"%s\" query=\"%s\">%s</a></li>" % (operation, get_next_field(field, query), elem, elem)
+	
+	if operation == "places":
+		body['data']['friendsLink'] = "<a id=\"browseLink\" href=\"#\" operation=\"friends\" field=\"%s\" query=\"%s\">See who's been here.</a></li>" % (field, query)
+		
+	return body	
+		
+#APP ROUTES	
 @app.route('/', methods=['GET', 'POST'])
 def welcome():
 	
-	if request.args.get('code', None):
-		access_token = fbapi_auth(request.args.get('code'))[0]
-		
-		if request.args.get('token_number', None):
-			tokenNumber = request.args.get('token_number')
-		else:
-			tokenNumber = 0
+	if not "_sid" in request.cookies or not redisServer.exists(request.cookies["_sid"]):
+		if request.args.get('code', None):
+			access_token = fbapi_auth(request.args.get('code'))[0]
+			userInfo = get_user_info(access_token)
+			name = userInfo['name']
+			user = userInfo['username']
+			sessID = create_session_id()
 			
-		username = get_username(access_token)
-		friendCount = get_friend_count(access_token)
-		tokenInterval = 400
-		friendOffset = tokenInterval * tokenNumber
-		numberOfTokens = int(math.ceil(friendCount/float(tokenInterval)))
-		friendInterval = 20
-		lastCall = friendOffset+tokenInterval-friendInterval
+			redisServer.hset(sessID, "username", user)
+			redisServer.hset(sessID, "first_name", userInfo['first_name'])
+			redisServer.expire(sessID, 604800)
+			
+			if user not in db.collection_names():
+				redisServer.set(user+":status", 0)
+				
+				#QUEUE UP CHECKIN TASKS
+				friendCount = get_friend_count(access_token)
+				interval = 20
 		
-		for j in xrange(numberOfTokens):
-			if j<numberOfTokens-1:
-				for i in xrange(tokenInterval*j, tokenInterval*(j+1), friendInterval):
-					redisQueue.enqueue(GetFriends, username, friendInterval, i, access_token)
+				if friendCount%interval == 0:
+					lastOffset = friendCount-interval
+				else:
+					lastOffset = friendCount-friendCount%interval
+		
+				for i in xrange(0, lastOffset, interval):
+					resq.enqueue(GetFriends, user, interval, i, access_token)
+				resq.enqueue(GetFriends, user, interval, lastOffset, access_token, 1)
+				
+				#RETURN LOADING SCREEN
+				r = make_response(Template(filename='templates/index.html').render(logged_in=True, user=user, status=0))
 			else:
-				for i in xrange(tokenInterval*j, friendCount-friendInterval, friendInterval):
-					redisQueue.enqueue(GetFriends, username, friendInterval, i, access_token)
-				redisQueue.enqueue(GetFriends, username, friendInterval, i, access_token, 1)
+				#REDIRECT TO MAIN USER PAGE
+				r = make_response(redirect('/%s/' % user))
 			
-			redisQueue.enqueue(GetNewToken, tokenNumber+1)
+			
+			r.set_cookie("_sid", sessID, max_age=604800)
+			return r
+			
+		else:
+			#RETURN GENERIC NON-LOGGED IN TEMPLATE
+			return Template(filename='templates/index.html').render(logged_in=False, facebook_auth_url=oauth_login_url(next_url=get_base_url()))
 		
-			
-		return Template(filename='templates/index.html').render(name=username)
 	else:
-		return redirect(oauth_login_url(next_url=get_facebook_callback_url()))
-		
-@app.route('/login/', methods=['GET', 'POST'])
-def login():
-	print oauth_login_url(next_url=get_home())
-	return redirect(oauth_login_url(next_url=get_facebook_callback_url()))
+		user = redisServer.hget(request.cookies["_sid"], "username")
+		return redirect('/%s/' % user)
+
 
 @app.route('/close/', methods=['GET', 'POST'])
 def close():
 	return render_template('templates/close.html')
 
-@app.route('/_checkstatus/', methods=['POST'])
-def check_status():
-	user = request.args.get('user')
+@app.route('/<user>/', methods=['GET', 'POST'])
+def show_user_page(user):
+	if request.cookies['_sid'] and user == redisServer.hget(request.cookies['_sid'], "username"):
+		collection = db[user]
+		countries = sorted(collection.distinct("country"))
+		firstName = redisServer.hget(request.cookies['_sid'], "first_name")
 	
-	if redisObject.get(user) == 1:
-		redisObject.delete(user)
-		return jsonify(state=1)
+		if None in countries:
+			countries.remove(None)
+	
+		return Template(filename='templates/user.html').render(logged_in=True, user=user, name=firstName, countries=countries, baseURL=get_base_url())
+	
 	else:
-		return jsonify(state=0)
+		return Template(filename='templates/user.html').render(logged_in=False, baseURL=get_base_url())
+	
+@app.route('/check_status/', methods=['POST'])
+def check_status():
+	user = request.args.get('user', None)
+	body = {}
+	
+	if request.cookies['_sid'] and user == redisServer.hget(request.cookies['_sid'], "username"):
+		body['status'] = redisServer.hget(user, "status")
+	else:
+		body['error'] = "Error validating request."
+	
+	return jsonify(body)
+	
+@app.route('/ajax/', methods=['POST'])
+def return_browsing_data():
+	if request.is_xhr and request.cookies['_sid'] and redisServer.exists(request.cookies['_sid']):
+		operation = request.args.get('op', None)
+		user = redisServer.hget(request.cookies['_sid'], "username")
+		body = {}
 		
+		if operation == 'places' or operation == 'friends':
+			try:
+				body = return_browse_data(user, operation, request.args.get('field', None), request.args.get('q', None))
+			except TypeError:
+				body['error'] = "Badly formed query."
+				
+		elif operation == 'search':
+			pass
+			
+		else:
+			body['error'] = "Invalid operation."
+			
+	else:
+		body['error'] = "Error validating request."
+	
+	return jsonify(body)	
+	
 @app.route('/callback/', methods=['GET', 'POST'])
 def callback():
 	if request.method == "GET" and request.args.get('code'):
 		code = request.args.get('code')
-		return redirect(get_facebook_callback_url() + '?code=%s' % code)
+		return redirect(get_base_url() + '?code=%s' % code)
 		
-
+@app.route('/logout/', methods=['GET', 'POST'])
+def logout():
+	if request.cookies['_sid'] and redisServer.exists(request.cookies['_sid']):
+		redisServer.delete(request.cookies['_sid'])
+		
+		return redirect('/')
+		
+	else:
+		return redirect('/error/')
+		
+@app.route('/error/', methods=['GET'])
+def show_error_page():
+	return Template(filename='templates/error.html').render()
+	
+	
 if __name__ == '__main__':
 	port = int(os.environ.get("PORT", 5000))
 	if APP_ID and APP_SECRET:
