@@ -25,9 +25,7 @@
 					</div>
 					<div id="linkContainer">
 						<ul id="linkList">
-							% for country in countries:
-								<li><a id="browseLink" href="#" operation="places" field="country" query="${country}">${country}</a></li>
-							% endfor
+							${links}
 						</ul>
 					</div>
 					<div id="test">
@@ -44,8 +42,9 @@
 		$("body #browseLink").live(
 			"click",
 				function browseData(event) {
+					event.preventDefault();
 					$.post(
-						"/ajax/?op=" + $(this).attr("operation") + "&field=" + $(this).attr("field") + "&q=" + $(this).attr("query"),
+						"/ajax/?op=" + $(this).attr("op") + "&f=" + $(this).attr("f") + "&q=" + $(this).attr("q"),
 						function (result) {
 							if (!result.error) {
 								$("#friendsLink").empty().append(result.data.friendsLink);

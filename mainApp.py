@@ -172,10 +172,10 @@ def return_browse_data(user, operation, field, query):
 		distinct = get_next_field(field, query)
 	
 	for elem in sorted(collection.find({field:query}).distinct(distinct)):
-		body['data']['links'] += "<li><a id=\"browseLink\" href=\"#\" operation=\"%s\" field=\"%s\" query=\"%s\">%s</a></li>" % (operation, get_next_field(field, query), elem, elem)
+		body['data']['links'] += "<li><a id=\"browseLink\" href=\"?op=browse&f=%s&q=%s\" op=\"%s\" f=\"%s\" q=\"%s\">%s</a></li>" % (distinct, elem, operation, distinct, elem, elem)
 	
 	if operation == "places":
-		body['data']['friendsLink'] = "<a id=\"browseLink\" href=\"#\" operation=\"friends\" field=\"%s\" query=\"%s\">See who's been here.</a></li>" % (field, query)
+		body['data']['friendsLink'] = "<a id=\"browseLink\" href=\"?op=friends&f=%s&q=%s\" op=\"friends\" f=\"%s\" q=\"%s\">See who's been here.</a></li>" % (field, query, field, query)
 		
 	return body	
 		
@@ -237,14 +237,25 @@ def close():
 @app.route('/<user>/', methods=['GET', 'POST'])
 def show_user_page(user):
 	if request.cookies['_sid'] and user == redisServer.hget(request.cookies['_sid'], "username"):
-		collection = db[user]
-		countries = sorted(collection.distinct("country"))
 		firstName = redisServer.hget(request.cookies['_sid'], "first_name")
-	
-		if None in countries:
-			countries.remove(None)
-	
-		return Template(filename='templates/user.html').render(logged_in=True, user=user, name=firstName, countries=countries, baseURL=get_base_url())
+		collection = db[user]
+		
+		if request.args.get('op', None) and request.args.get('f') and request.args.get('q'):
+			links = return_browse_data(user, request.args.get('op'), request.args.get('f'), request.args.get('q'))
+		
+		elif len(request.args.items()) == 0:
+			links = ""
+			for country in sorted(collection.distinct("country")):
+				if country == "None":
+					continue
+				else:
+					links += "<li><a id=\"browseLink\" href=\"?op=browse&f=state&q=%s\" op=\"places\" f=\"country\" q=\"%s\">%s</a></li>" % (country, country, country)
+		
+		else:
+			links += "Error."
+			
+		
+		return Template(filename='templates/user.html').render(logged_in=True, user=user, name=firstName, links=links, baseURL=get_base_url())
 	
 	else:
 		return Template(filename='templates/user.html').render(logged_in=False, baseURL=get_base_url())
@@ -270,7 +281,7 @@ def return_browsing_data():
 		
 		if operation == 'places' or operation == 'friends':
 			try:
-				body = return_browse_data(user, operation, request.args.get('field', None), request.args.get('q', None))
+				body = return_browse_data(user, operation, request.args.get('f', None), request.args.get('q', None))
 			except TypeError:
 				body['error'] = "Badly formed query."
 				
