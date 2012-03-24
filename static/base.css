@@ -39,3 +39,8 @@ body {
 .welcome h1 {
 	margin: 0;
 }
+#checkinContainer {
+	display: none;
+	min-height: 300px;
+	min-width: 200px;
+}

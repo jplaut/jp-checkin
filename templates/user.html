@@ -3,61 +3,112 @@
 <html>
 	<head>
 		<meta http-equiv="Content-type" content="text/html; charset=utf-8">
-		% if logged_in:
 			<title>Checkin Browser</title>
-		% else:
-			<title>Validation Error</title>
-		% endif
-		
 		<link rel=stylesheet href='../static/base.css' type='text/css' media=screen />
-		<script type='text/javascript' src='../static/jquery.min.js'></script>	
-	</head>
-	<body>
-		<div id="bodyWrapper">
-			<div id="mainContent">
-				% if logged_in:
-					<div class="logout">
-						<a href="/logout/">Logout</a>
-					</div>
-					<div class="friendsLink">
-					</div>
-					<div id="friendsLink">
-					</div>
-					<div id="linkContainer">
-						<ul id="linkList">
-							${links}
-						</ul>
-					</div>
-					<div id="test">
-						</div>
-				% else:
-					<div class="error">
-						<p>There was an error validating the request. Please try <a href="${baseURL}">logging in</a> again.</p>
-					</div>
-				% endif		
-			</div>		
-		</div>
+		
+		<script type='text/javascript' src='../static/jquery.min.js'></script>
+
+		<script type="text/javascript" charset="utf-8">
+			$(document).ready(
+				function setInitialState() {
+					var initialState = {links: $("#linkList").html()};
+					history.replaceState(initialState, "", "");
+				}
+			)
+		</script>
 		
 		<script type="text/javascript" charset="utf-8">
-		$("body #browseLink").live(
-			"click",
-				function browseData(event) {
+		
+			function getLinks (event, op, field, query) {
+				if (-[1,]) {
 					event.preventDefault();
 					$.post(
-						"/ajax/?op=" + $(this).attr("op") + "&f=" + $(this).attr("f") + "&q=" + $(this).attr("q"),
+						"/ajax/?op=" + op + "&f=" + field + "&q=" + query,
 						function (result) {
 							if (!result.error) {
 								$("#friendsLink").empty().append(result.data.friendsLink);
 								$("#linkList").empty().append(result.data.links);
-							}
-							else {
+							} else {
 								$("#friendsLink").empty();
 								$("#linkList").empty().append(result.error);
 							}
+							var state = {links: $("#linkList").html()};
+							history.pushState(state, query, "?op=" + op + "&f=" + field + "&q=" + query);
 						},
 						"json");
 					}	
-				)
+				}
+				
+			function getCheckins (event, query) {
+				event.preventDefault();
+				$.post(
+					"/ajax/?q=" + query,
+					function (result) {
+						if (!result.error) {
+							$("#checkins").empty().append(result.data.checkins);
+						} else {
+							$("#checkins").empty().append(result.error);
+						}
+					},
+					"json"
+				);
+			}
+				
+			window.onpopstate = function(event) {
+				if (event.state) {
+					$("#linkList").empty().append(event.state.links);
+				}
+			}
+			
+		</script>
+	</head>
+	<body>
+		<div id="bodyWrapper">
+			<div id="mainContent">
+					<div class="logout">
+						<a href="/logout/">Logout</a>
+					</div>
+					
+					<div id="friendsLink">
+					% if 'data' in links and 'friendsLink' in links['data']:
+						${links['data']['friendsLink']}
+					% endif
+					</div>
+					% if 'error' in links:
+						<div id="error">
+							${links['error']}
+						</div>
+					% elif 'data' in links:
+						<div id="linkContainer">
+							<ul id="linkList">
+								${links['data']['links']}
+							</ul>
+						</div>
+					% endif
+					</div>
+					<div id="checkinContainer">
+						<ul id="checkins">
+						</ul>
+					</div>
+			</div>		
+		</div>
+		<script type="text/javascript" charset="utf-8">
+			$("body").on(
+						"click",
+						"#linkList a",
+						function (event) {
+							getLinks(event, $(this).attr("op"), $(this).attr("f"), $(this).attr("q"));
+						}
+					);
+					
+			$("body").on(
+						"click",
+						"#checkins a",
+						function (event) {
+							getCheckins(event, $(this.attr("q")));
+							$("#checkinContainer").css('display', 'visible');
+						}
+					);
 		</script>
 	</body>
 </html>

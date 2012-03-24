@@ -124,7 +124,7 @@ class GetFriends:
 	queue = "*"
 	
 	@staticmethod	
-	def perform(user, limit, offset, token, last=0):
+	def perform(user, limit, offset, token):
 		friendsArray = []
 		
 		friendsRaw = fql("SELECT uid2 FROM friend WHERE uid1=me() LIMIT %s OFFSET %s" % (limit, offset), token)
@@ -132,7 +132,7 @@ class GetFriends:
 		for friend in friendsRaw['data']:
 			friendsArray.append(friend['uid2'])
 		
-		resq.enqueue(GetCheckinsPerFriend, user, friendsArray, token, last)
+		resq.enqueue(GetCheckinsPerFriend, user, friendsArray, token)
 			
 						
 class GetCheckinsPerFriend:
@@ -140,7 +140,7 @@ class GetCheckinsPerFriend:
 	queue = "*"
 		
 	@staticmethod	
-	def perform(user, friends, token, last=0):
+	def perform(user, friends, token):
 		
 		baseURL = "https://graph.facebook.com/"
 		batch = ""
@@ -156,19 +156,10 @@ class GetCheckinsPerFriend:
 		dataJSON = json.loads(r.text)
 		
 		if dataJSON[0]['body'][0:8] != "{\"error\"":
-			if not last:
-				for person in dataJSON:
-					resq.enqueue(GetIndividualCheckins, person, user, friendArray[dataJSON.index(person)])
-			else:
-				for person in dataJSON[0:-1]:
-					resq.enqueue(GetIndividualCheckins, person, user, friendArray[dataJSON.index(person)])
-				resq.enqueue(GetIndividualCheckins, dataJSON[-1], user, friendArray[-1], 1)
+			for person in dataJSON:
+				resq.enqueue(GetIndividualCheckins, person, user, friendArray[dataJSON.index(person)])
 		else:
-			if not last:
-				resq.enqueue(PerformLater, "GetCheckinsPerFriend", user, friends, token)
-			else:
-				resq.enqueue(PerformLater, "GetCheckinsPerFriend", user, friends, token, 1)
-				redisServer.setex(user+":status", 1)
+			resq.enqueue(PerformLater, "GetCheckinsPerFriend", user, friends, token)
 
 					
 class GetIndividualCheckins:
@@ -176,7 +167,7 @@ class GetIndividualCheckins:
 	queue = "*"
 	
 	@staticmethod
-	def perform(checkins, user, friend, last=0):
+	def perform(checkins, user, friend):
 		checkinsJSON = json.loads(checkins['body'])['data']
 		
 		for checkin in checkinsJSON:
@@ -184,12 +175,6 @@ class GetIndividualCheckins:
 				resq.enqueue(MoveCheckinToDatabase, checkin, user, friend)
 			else:
 				pass
-		
-		if last:
-			if redisServer.get(user+":status") == 1:
-				redisServer.setex(user+":status", 2)
-			else:
-				redisServer.setex(user+":status", 1)
 			
 class MoveCheckinToDatabase:
 	
