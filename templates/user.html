@@ -19,40 +19,35 @@
 		
 		<script type="text/javascript" charset="utf-8">
 		
-			function getLinks (event, op, field, query) {
-				if (-[1,]) {
-					event.preventDefault();
-					$.post(
-						"/ajax/?op=" + op + "&f=" + field + "&q=" + query,
-						function (result) {
-							if (!result.error) {
-								$("#friendsLink").empty().append(result.data.friendsLink);
-								$("#linkList").empty().append(result.data.links);
-							} else {
-								$("#friendsLink").empty();
-								$("#linkList").empty().append(result.error);
-							}
-							var state = {links: $("#linkList").html()};
-							history.pushState(state, query, "?op=" + op + "&f=" + field + "&q=" + query);
-						},
-						"json");
-					}	
-				}
-				
-			function getCheckins (event, query) {
+		function getLinks (event, args) {
 				event.preventDefault();
 				$.post(
-					"/ajax/?q=" + query,
+					"/ajax/?" + $.param(args),
 					function (result) {
 						if (!result.error) {
-							$("#checkins").empty().append(result.data.checkins);
+							if (result.data.places) {
+								$("#friendsLink").empty().append(result.data.friendsLink);
+								$("#linkList").empty().append(result.data.places);
+							} else if (result.data.friends) {
+								$("#friendsLink").empty().append(result.data.friendsLink);
+								$("#linkList").empty().append(result.data.friends);
+							} else {
+								$("#checkinTitle").empty().append(result.data.title);
+								$("#checkins").empty();
+								$(result.data.checkins).each(function(){
+									$("#checkins ul").append($(this));
+								}
+								$("#checkinContainer").fadeIn();
+							}
 						} else {
-							$("#checkins").empty().append(result.error);
+							$("#friendsLink").empty();
+							$("#linkList").empty().append(result.error);
 						}
+						var state = {links: $("#linkList").html()};
+						history.pushState(state, args["q"], "?" + $.param(args));
 					},
-					"json"
-				);
-			}
+					"json");
+				}	
 				
 			window.onpopstate = function(event) {
 				if (event.state) {
@@ -81,25 +76,49 @@
 					% elif 'data' in links:
 						<div id="linkContainer">
 							<ul id="linkList">
-								${links['data']['links']}
+								% if 'places' in links['data']:
+									${links['data']['places']}
+								% elif 'friends' in links['data']:
+									${links['data']['friends']}
+								% else:
+									% for checkin in links['data']['checkins']:
+										${checkin}
+									% endfor
+								% endif
 							</ul>
 						</div>
 					% endif
 					</div>
 					<div id="checkinContainer">
-						<ul id="checkins">
-						</ul>
+						<div id="checkinTitle">
+							</div>
+						<div id="checkins">
+							<ul>
+							</ul>
+						</div>
 					</div>
 			</div>		
 		</div>
 		<script type="text/javascript" charset="utf-8">
+		//if (-[1,]) {
 			$("body").on(
 						"click",
 						"#linkList a",
 						function (event) {
-							getLinks(event, $(this).attr("op"), $(this).attr("f"), $(this).attr("q"));
+							var argsArray = $(this).attr('href').replace("?", "").split("&");
+							var args = {};
+							
+							$.each(
+								argsArray, 
+								function (index, value) {
+									argsSplit = value.split("=");
+									args[argsSplit[0]] = argsSplit[1];
+								})
+							
+							getLinks(event, args);
 						}
 					);
+				//}
 					
 			$("body").on(
 						"click",
